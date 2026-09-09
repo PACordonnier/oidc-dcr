@@ -14,6 +14,7 @@ All the DCR-related resources (ConfigMap, Service, ServiceAccount, Role, RoleBin
 
 ## Example
 
+- [Getting started](./docs/getting-started.md)
 - [Configuration](./docs/configuration.md)
 - [Data mapping](./docs/data-mapping.md)
 - [Headlamp integration](./docs/example-headlamp.md)
