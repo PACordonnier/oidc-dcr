@@ -1,4 +1,4 @@
-# Keycloak DCR registration
+# OIDC DCR - Dynamic Client Registration with Helm
 
 The `oidc-dcr` chart provides automatic client's registration with OIDC providers supporting the OpenID Connect Dynamic Client Registration (DCR) protocol (such as Keycloak). It is used to automate the registration of applications that need OIDC authentication without any manual intervention and elevated privileges.
 
