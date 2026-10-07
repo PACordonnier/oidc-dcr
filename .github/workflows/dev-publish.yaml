@@ -1,0 +1,81 @@
+# Fork only: publish a pre-release of the chart and its job image to the
+# quay.io namespace of the fork, for testing before an upstream release
+name: Dev publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/**
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish dev chart to Quay
+    runs-on: ubuntu-latest
+    env:
+      QUAY_NAMESPACE: ${{ vars.QUAY_NAMESPACE }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Compute the dev version
+        id: version
+        run: |
+          BASE=$(jq -r '.["."]' .release-please-manifest.json)
+          NEXT=$(echo "$BASE" | awk -F. '{ print $1"."$2"."$3+1 }')
+          VERSION="$NEXT-dev.$(git rev-parse --short HEAD)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: "latest"
+
+      - name: Log in to Quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | helm registry login quay.io \
+            --username "${{ secrets.QUAY_USERNAME }}" \
+            --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Quay.io registry
+        uses: docker/login-action@v4
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      # The image is pushed before the chart which references it by its version
+      - name: Build and push job image to Quay
+        run: |
+          docker buildx build image \
+            --platform linux/amd64 \
+            --tag "quay.io/$QUAY_NAMESPACE/oidc-dcr-job:${{ steps.version.outputs.version }}" \
+            --push
+
+      - name: Point the chart to the fork version and image
+        run: |
+          yq -i ".version = \"${{ steps.version.outputs.version }}\"" Chart.yaml
+          yq -i ".image.repository = \"$QUAY_NAMESPACE/oidc-dcr-job\"" values.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm package . --destination .dist
+
+      - name: Push chart to Quay (OCI)
+        run: |
+          CHART_PACKAGE=$(ls .dist/*.tgz)
+          helm push "$CHART_PACKAGE" "oci://quay.io/$QUAY_NAMESPACE"
+
+      - name: Summary
+        run: |
+          {
+            echo "Chart: \`oci://quay.io/$QUAY_NAMESPACE/oidc-dcr\` version \`${{ steps.version.outputs.version }}\`"
+            echo
+            echo "Image: \`quay.io/$QUAY_NAMESPACE/oidc-dcr-job:${{ steps.version.outputs.version }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
