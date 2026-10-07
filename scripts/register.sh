@@ -9,6 +9,26 @@ if [ -n "$TLS_CERTIFICATE" ]; then
   CURL_OPTION="$CURL_OPTION --cacert $CA_FILE"
 fi
 
+# Reverse DNS wait
+# Providers like Keycloak, with the trusted hosts policy, reverse-resolve the IP
+# of the caller. The record of the pod IP, published by the headless service,
+# appears after the pod starts. A short pause once it resolves leaves time to
+# the negative cache of the other DNS replicas to expire.
+if [ "${DNS_WAIT_TTL_SECONDS:-0}" -gt 0 ] && [ -n "$POD_IP" ]; then
+  deadline=$(($(date +%s) + DNS_WAIT_TTL_SECONDS))
+  until nslookup "$POD_IP" 2>/dev/null | grep -q 'name = '; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "WARN: no reverse DNS record for $POD_IP after $DNS_WAIT_TTL_SECONDS seconds"
+      break
+    fi
+    sleep 1
+  done
+  nslookup "$POD_IP" 2>/dev/null | grep -q 'name = ' && {
+    echo "INFO: reverse DNS record found for $POD_IP"
+    sleep 5
+  }
+fi
+
 # Current registration detection
 secret=$(kubectl get secret "$SECRET_NAME" -o json 2>/dev/null)
 if [ -n "$secret" ] >/dev/null; then
