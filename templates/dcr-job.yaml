@@ -92,6 +92,12 @@ spec:
               value: {{ include "secret.keys" . | fromYaml | toJson | quote }}
             - name: CURL_OPTION
               value: {{ ternary "-sk" "-s" .Values.tls.insecure | quote }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: DNS_WAIT_TTL_SECONDS
+              value: {{ .Values.waitForDns.ttlSeconds | int | quote }}
             {{- if (ne .Values.tls.certificate "") }}
             - name: TLS_CERTIFICATE
               value: {{ .Values.tls.certificate | quote }}
